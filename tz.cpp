@@ -74,6 +74,7 @@
 #include <Windows.h>
 #endif // _WIN32
 
+#include "tz.h"
 #include "tz_private.h"
 #include "ios.h"
 
@@ -93,6 +94,8 @@
 #include <locale>
 #include <codecvt>
 #endif // _WIN32
+
+#include <pack_unpack.h>
 
 // unistd.h is used on some platforms as part of the the means to get
 // the current time zone. On Win32 Windows.h provides a means to do it.
@@ -1458,25 +1461,6 @@ detail::Rule::split_overlaps(std::vector<Rule>& rules)
 
 // time_zone
 
-detail::zonelet::~zonelet()
-{
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-    using minutes = std::chrono::minutes;
-    using string = std::string;
-    if (tag_ == has_save)
-        u.save_.~minutes();
-    else
-        u.rule_.~string();
-#endif
-}
-
-detail::zonelet::zonelet()
-{
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-    ::new(&u.rule_) std::string();
-#endif
-}
-
 detail::zonelet::zonelet(const zonelet& i)
     : gmtoff_(i.gmtoff_)
     , tag_(i.tag_)
@@ -1491,22 +1475,15 @@ detail::zonelet::zonelet(const zonelet& i)
     , first_rule_(i.first_rule_)
     , last_rule_(i.last_rule_)
 {
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-    if (tag_ == has_save)
-        ::new(&u.save_) std::chrono::minutes(i.u.save_);
-    else
-        ::new(&u.rule_) std::string(i.u.rule_);
-#else
-    if (tag_ == has_save)
-        u.save_ = i.u.save_;
-    else
-        u.rule_ = i.u.rule_;
-#endif
+	if (tag_ == has_save)
+		u.save_ = i.u.save_;
+	else
+		u.rule_ = i.u.rule_;
 }
 
 time_zone::time_zone(const std::string& s, detail::undocumented)
 #if LAZY_INIT
-    : adjusted_(new std::once_flag{})
+    : adjusted_(false)
 #endif
 {
     try
@@ -1626,24 +1603,24 @@ static
 std::pair<const Rule*, date::year>
 find_next_rule(const Rule* first_rule, const Rule* last_rule, const Rule* r, date::year y)
 {
-    using namespace date;
-    if (y == r->ending_year())
-    {
-        if (r == last_rule-1)
-            return {nullptr, year::max()};
-        ++r;
-        if (y == r->ending_year())
-            return {r, y};
-        return {r, r->starting_year()};
-    }
-    if (r == last_rule-1 || r->ending_year() < r[1].ending_year())
-    {
-        while (r > first_rule && r->starting_year() == r[-1].starting_year())
-            --r;
-        return {r, ++y};
-    }
-    ++r;
-    return {r, y};
+	using namespace date;
+	if (y == r->ending_year())
+	{
+		if (r == last_rule - 1)
+			return{ nullptr, year::max() };
+		++r;
+		if (y == r->ending_year())
+			return{ r, y };
+		return{ r, r->starting_year() };
+	}
+	if (r == last_rule - 1 || r->ending_year() < r[1].ending_year())
+	{
+		while (r > first_rule && r->starting_year() == r[-1].starting_year())
+			--r;
+		return{ r, ++y };
+	}
+	++r;
+	return{ r, y };
 }
 
 // Find the rule that comes chronologically after Rule r.  For multi-year rules,
@@ -1821,112 +1798,112 @@ find_rule(const std::pair<const Rule*, date::year>& first_rule,
 void
 time_zone::adjust_infos(const std::vector<Rule>& rules)
 {
-    using namespace std::chrono;
-    using namespace date;
-    const zonelet* prev_zonelet = nullptr;
-    for (auto& z : zonelets_)
-    {
-        std::pair<const Rule*, const Rule*> eqr{};
-        std::istringstream in;
-        in.exceptions(std::ios::failbit | std::ios::badbit);
-        // Classify info as rule-based, has save, or neither
-        if (!z.u.rule_.empty())
-        {
-            // Find out if this zonelet has a rule or a save
-            eqr = std::equal_range(rules.data(), rules.data() + rules.size(), z.u.rule_);
-            if (eqr.first == eqr.second)
-            {
-                // The rule doesn't exist.  Assume this is a save
-                try
-                {
-                    using namespace std::chrono;
-                    using string = std::string;
-                    in.str(z.u.rule_);
-                    auto tmp = duration_cast<minutes>(parse_signed_time(in));
+	using namespace std::chrono;
+	using namespace date;
+	const zonelet* prev_zonelet = nullptr;
+	for (auto& z : zonelets_)
+	{
+		std::pair<const Rule*, const Rule*> eqr{};
+		std::istringstream in;
+		in.exceptions(std::ios::failbit | std::ios::badbit);
+		// Classify info as rule-based, has save, or neither
+		if (!z.u.rule_.empty())
+		{
+			// Find out if this zonelet has a rule or a save
+			eqr = std::equal_range(rules.data(), rules.data() + rules.size(), z.u.rule_);
+			if (eqr.first == eqr.second)
+			{
+				// The rule doesn't exist.  Assume this is a save
+				try
+				{
+					using namespace std::chrono;
+					using string = std::string;
+					in.str(z.u.rule_);
+					auto tmp = duration_cast<minutes>(parse_signed_time(in));
 #if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-                    z.u.rule_.~string();
-                    z.tag_ = zonelet::has_save;
-                    ::new(&z.u.save_) minutes(tmp);
+					z.u.rule_.~string();
+					z.tag_ = zonelet::has_save;
+					::new(&z.u.save_) minutes(tmp);
 #else
-                    z.u.rule_.clear();
-                    z.tag_ = zonelet::has_save;
-                    z.u.save_ = tmp;
+					z.u.rule_.clear();
+					z.tag_ = zonelet::has_save;
+					z.u.save_ = tmp;
 #endif
-                }
-                catch (...)
-                {
-                    std::cerr << name_ << " : " << z.u.rule_ << '\n';
-                    throw;
-                }
-            }
-        }
-        else
-        {
-            // This zone::zonelet has no rule and no save
-            z.tag_ = zonelet::is_empty;
-        }
+				}
+				catch (...)
+				{
+					std::cerr << name_ << " : " << z.u.rule_ << '\n';
+					throw;
+				}
+			}
+		}
+		else
+		{
+			// This zone::zonelet has no rule and no save
+			z.tag_ = zonelet::is_empty;
+		}
 
-        minutes final_save{0};
-        if (z.tag_ == zonelet::has_save)
-        {
-            final_save = z.u.save_;
-        }
-        else if (z.tag_ == zonelet::has_rule)
-        {
-            z.last_rule_ = find_rule_for_zone(eqr, z.until_year_, z.gmtoff_,
-                                              z.until_date_);
-            if (z.last_rule_.first != nullptr)
-                final_save = z.last_rule_.first->save();
-        }
-        z.until_utc_ = z.until_date_.to_sys(z.until_year_, z.gmtoff_, final_save);
-        z.until_std_ = local_seconds{z.until_utc_.time_since_epoch()} + z.gmtoff_;
-        z.until_loc_ = z.until_std_ + final_save;
+		minutes final_save{ 0 };
+		if (z.tag_ == zonelet::has_save)
+		{
+			final_save = z.u.save_;
+		}
+		else if (z.tag_ == zonelet::has_rule)
+		{
+			z.last_rule_ = find_rule_for_zone(eqr, z.until_year_, z.gmtoff_,
+				z.until_date_);
+			if (z.last_rule_.first != nullptr)
+				final_save = z.last_rule_.first->save();
+		}
+		z.until_utc_ = z.until_date_.to_sys(z.until_year_, z.gmtoff_, final_save);
+		z.until_std_ = local_seconds{ z.until_utc_.time_since_epoch() } +z.gmtoff_;
+		z.until_loc_ = z.until_std_ + final_save;
 
-        if (z.tag_ == zonelet::has_rule)
-        {
-            if (prev_zonelet != nullptr)
-            {
-                z.first_rule_ = find_rule_for_zone(eqr, prev_zonelet->until_utc_,
-                                                        prev_zonelet->until_std_,
-                                                        prev_zonelet->until_loc_);
-                if (z.first_rule_.first != nullptr)
-                {
-                    z.initial_save_ = z.first_rule_.first->save();
-                    z.initial_abbrev_ = z.first_rule_.first->abbrev();
-                    if (z.first_rule_ != z.last_rule_)
-                    {
-                        z.first_rule_ = find_next_rule(eqr.first, eqr.second,
-                                                       z.first_rule_.first,
-                                                       z.first_rule_.second);
-                    }
-                    else
-                    {
-                        z.first_rule_ = std::make_pair(nullptr, year::min());
-                        z.last_rule_ = std::make_pair(nullptr, year::max());
-                    }
-                }
-            }
-            if (z.first_rule_.first == nullptr && z.last_rule_.first != nullptr)
-            {
-                z.first_rule_ = std::make_pair(eqr.first, eqr.first->starting_year());
-                z.initial_abbrev_ = find_first_std_rule(eqr)->abbrev();
-            }
-        }
+		if (z.tag_ == zonelet::has_rule)
+		{
+			if (prev_zonelet != nullptr)
+			{
+				z.first_rule_ = find_rule_for_zone(eqr, prev_zonelet->until_utc_,
+					prev_zonelet->until_std_,
+					prev_zonelet->until_loc_);
+				if (z.first_rule_.first != nullptr)
+				{
+					z.initial_save_ = z.first_rule_.first->save();
+					z.initial_abbrev_ = z.first_rule_.first->abbrev();
+					if (z.first_rule_ != z.last_rule_)
+					{
+						z.first_rule_ = find_next_rule(eqr.first, eqr.second,
+							z.first_rule_.first,
+							z.first_rule_.second);
+					}
+					else
+					{
+						z.first_rule_ = std::make_pair(nullptr, year::min());
+						z.last_rule_ = std::make_pair(nullptr, year::max());
+					}
+				}
+			}
+			if (z.first_rule_.first == nullptr && z.last_rule_.first != nullptr)
+			{
+				z.first_rule_ = std::make_pair(eqr.first, eqr.first->starting_year());
+				z.initial_abbrev_ = find_first_std_rule(eqr)->abbrev();
+			}
+		}
 
 #ifndef NDEBUG
-        if (z.first_rule_.first == nullptr)
-        {
-            assert(z.first_rule_.second == year::min());
-            assert(z.last_rule_.first == nullptr);
-            assert(z.last_rule_.second == year::max());
-        }
-        else
-        {
-            assert(z.last_rule_.first != nullptr);
-        }
+		if (z.first_rule_.first == nullptr)
+		{
+			assert(z.first_rule_.second == year::min());
+			assert(z.last_rule_.first == nullptr);
+			assert(z.last_rule_.second == year::max());
+		}
+		else
+		{
+			assert(z.last_rule_.first != nullptr);
+		}
 #endif
-        prev_zonelet = &z;
-    }
+		prev_zonelet = &z;
+	}
 }
 
 static
@@ -2033,11 +2010,11 @@ time_zone::get_info_impl(sys_seconds tp, int tz_int) const
             " is out of range:[" + std::to_string(static_cast<int>(min_year)) + ", "
                                  + std::to_string(static_cast<int>(max_year)) + "]");
 #if LAZY_INIT
-    std::call_once(*adjusted_,
-                   [this]()
-                   {
-                       const_cast<time_zone*>(this)->adjust_infos(get_tzdb().rules);
-                   });
+	if (!adjusted_)
+	{
+		const_cast<time_zone*>(this)->adjust_infos(get_tzdb().rules);
+		const_cast<time_zone*>(this)->adjusted_ = true;
+	}
 #endif
     auto i = std::upper_bound(zonelets_.begin(), zonelets_.end(), tp,
         [timezone](sys_seconds t, const zonelet& zl)
@@ -2094,11 +2071,11 @@ operator<<(std::ostream& os, const time_zone& z)
     os.fill(' ');
     os.flags(std::ios::dec | std::ios::left);
 #if LAZY_INIT
-    std::call_once(*z.adjusted_,
-                   [&z]()
-                   {
-                       const_cast<time_zone&>(z).adjust_infos(get_tzdb().rules);
-                   });
+	if (!z.adjusted_)
+	{
+		const_cast<time_zone&>(z).adjust_infos(get_tzdb().rules);
+		const_cast<time_zone&>(z).adjusted_ = true;
+	}
 #endif
     os.width(35);
     os << z.name_;
@@ -2885,6 +2862,20 @@ get_tzdb()
 {
     static const TZ_DB& ref = access_tzdb() = init_tzdb();
     return ref;
+}
+
+void pack(std::ostringstream& os)
+{
+	TZ_DB& db = access_tzdb() = init_tzdb();	
+	cereal::BinaryOutputArchive archive(os);
+	archive(cereal::make_nvp("TimeZoneDatabase", db));	
+}
+
+void unpack(std::istringstream& is)
+{
+	TZ_DB result;	
+	cereal::BinaryInputArchive archive(is);
+	archive(cereal::make_nvp("TimeZoneDatabase", result));
 }
 
 const time_zone*

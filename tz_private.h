@@ -27,12 +27,7 @@
 // been invented (that woud involve another several millennia of evolution).
 // We did not mean to shout.
 
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-#include "tz.h"
-#else
-#include "date.h"
-#include <vector>
-#endif
+// #include "tz.h"
 
 namespace date
 {
@@ -47,13 +42,6 @@ class MonthDayTime
 private:
     struct pair
     {
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-        pair() : month_day_(date::jan / 1), weekday_(0U) {}
-
-        pair(const date::month_day& month_day, const date::weekday& weekday)
-            : month_day_(month_day), weekday_(weekday) {}
-#endif
-
         date::month_day month_day_;
         date::weekday   weekday_;
     };
@@ -62,26 +50,13 @@ private:
 
     Type                         type_{month_day};
 
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
     union U
-#else
-    struct U
-#endif
     {
         date::month_day          month_day_;
         date::month_weekday_last month_weekday_last_;
         pair                     month_day_weekday_;
 
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
         U() : month_day_{date::jan/1} {}
-#else
-        U() :
-            month_day_(date::jan/1),
-            month_weekday_last_(date::month(0U), date::weekday_last(date::weekday(0U)))
-        {}
-
-#endif // !defined(_MSC_VER) || (_MSC_VER >= 1900)
-
         U& operator=(const date::month_day& x);
         U& operator=(const date::month_weekday_last& x);
         U& operator=(const pair& x);
@@ -113,6 +88,33 @@ public:
 
     friend std::istream& operator>>(std::istream& is, MonthDayTime& x);
     friend std::ostream& operator<<(std::ostream& os, const MonthDayTime& x);
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(type_);
+		switch (type_)
+		{
+		case MonthDayTime::month_day:
+			ar(u.month_day_);
+			break;
+		case MonthDayTime::month_last_dow:
+			ar(u.month_weekday_last_);
+			break;
+		case MonthDayTime::lteq:
+			ar(u.month_day_weekday_.weekday_, u.month_day_weekday_.month_day_);
+			break;
+		case MonthDayTime::gteq:
+			ar(u.month_day_weekday_.weekday_, u.month_day_weekday_.month_day_);
+			break;
+		}
+		ar(s_);
+		ar(h_);
+		ar(m_);
+		ar(zone_);
+	}
 };
 
 // A Rule specifies one or more set of datetimes without using an offset.
@@ -159,7 +161,21 @@ public:
     friend bool operator==(const std::string& x, const Rule& y);
     friend bool operator<(const std::string& x, const Rule& y);
 
-    friend std::ostream& operator<<(std::ostream& os, const Rule& r);
+    friend std::ostream& operator<<(std::ostream& os, const Rule& r);	
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)	
+	{
+		using namespace date;
+		using namespace std::chrono;
+		ar(name_);
+		ar(starting_year_, ending_year_);
+		ar(starting_at_);
+		ar(save_.count());
+		ar(abbrev_);
+	}
 
 private:
     date::day day() const;
@@ -202,19 +218,10 @@ struct zonelet
     std::chrono::seconds gmtoff_;
     tag tag_ = has_rule;
 
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-    union U
-#else
     struct U
-#endif
     {
         std::string          rule_;
         std::chrono::minutes save_;
-
-        ~U() {}
-        U() {}
-        U(const U&) {}
-        U& operator=(const U&) = delete;
     } u;
 
     std::string                        format_;
@@ -228,18 +235,25 @@ struct zonelet
     std::pair<const Rule*, date::year> first_rule_{nullptr, date::year::min()};
     std::pair<const Rule*, date::year> last_rule_{nullptr, date::year::max()};
 
-    ~zonelet();
-    zonelet();
+	~zonelet() {};
+	zonelet() {};
     zonelet(const zonelet& i);
     zonelet& operator=(const zonelet&) = delete;
+	
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(gmtoff_, tag_, u.rule_, u.save_, format_);
+		ar(until_year_, until_date_, until_utc_, until_std_, until_loc_, initial_save_, initial_abbrev_);
+		#if LAZY_INIT == 0
+		#error("We can't serialize raw pointers (to Rule) hence LAZY_INIT has to be 1")
+		// ar(first_rule_, last_rule_);
+		#endif LAZY_INIT == 0
+	}
 };
 
 }  // namespace detail
 
 }  // namespace date
-
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-#include "tz.h"
-#endif
 
 #endif  // TZ_PRIVATE_H

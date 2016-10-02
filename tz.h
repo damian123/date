@@ -75,7 +75,7 @@ static_assert(HAS_REMOTE_API == 0 ? AUTO_DOWNLOAD == 0 : true,
 
 #include "date.h"
 
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
+#if defined(_MSC_VER)
 #include "tz_private.h"
 #endif
 
@@ -95,6 +95,7 @@ static_assert(HAS_REMOTE_API == 0 ? AUTO_DOWNLOAD == 0 : true,
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cereal/cereal.hpp>
 
 namespace date
 {
@@ -303,21 +304,17 @@ operator!=(const zoned_time<Duration1>& x, const zoned_time<Duration2>& y)
     return !(x == y);
 }
 
-#if !defined(_MSC_VER) || (_MSC_VER >= 1900)
-namespace detail { struct zonelet; }
-#endif
-
 class time_zone
 {
-private:
-
+private:	
     std::string          name_;
-    std::vector<detail::zonelet> zonelets_;
+    std::vector<date::detail::zonelet> zonelets_;
 #if LAZY_INIT
-    std::unique_ptr<std::once_flag> adjusted_;
+    bool adjusted_;
 #endif
 
 public:
+	time_zone() {};
 #if !defined(_MSC_VER) || (_MSC_VER >= 1900)
     time_zone(time_zone&&) = default;
     time_zone& operator=(time_zone&&) = default;
@@ -365,32 +362,18 @@ private:
     template <class Duration>
         sys_time<typename std::common_type<Duration, std::chrono::seconds>::type>
         to_sys_impl(local_time<Duration> tp, choose, std::true_type) const;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(name_, zonelets_);
+	#if LAZY_INIT
+		ar(adjusted_);
+	#endif
+	}
 };
-
-#if defined(_MSC_VER) && (_MSC_VER < 1900)
-
-inline
-time_zone::time_zone(time_zone&& src)
-    : name_(std::move(src.name_))
-    , zonelets_(std::move(src.zonelets_))
-#if LAZY_INIT
-    , adjusted_(std::move(src.adjusted_))
-#endif
-    {}
-
-inline
-time_zone&
-time_zone::operator=(time_zone&& src)
-{
-    name_ = std::move(src.name_);
-    zonelets_ = std::move(src.zonelets_);
-#if LAZY_INIT
-    adjusted_ = std::move(src.adjusted_);
-#endif
-    return *this;
-}
-
-#endif  // defined(_MSC_VER) && (_MSC_VER < 1900)
 
 inline
 const std::string&
@@ -501,6 +484,7 @@ private:
     std::string target_;
 public:
     explicit link(const std::string& s);
+	link() {};
 
     const std::string& name() const {return name_;}
     const std::string& target() const {return target_;}
@@ -509,6 +493,14 @@ public:
     friend bool operator< (const link& x, const link& y) {return x.name_ < y.name_;}
 
     friend std::ostream& operator<<(std::ostream& os, const link& x);
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(name_, target_);
+	}
 };
 
 inline bool operator!=(const link& x, const link& y) {return !(x == y);}
@@ -523,6 +515,7 @@ private:
 
 public:
     explicit leap(const std::string& s, detail::undocumented);
+	leap() {};
 
     sys_seconds date() const {return date_;}
 
@@ -554,6 +547,14 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& os, const leap& x);
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(date_);
+	}
 };
 
 inline bool operator!=(const leap& x, const leap& y) {return !(x == y);}
@@ -665,6 +666,12 @@ struct timezone_mapping
     std::string other;
     std::string territory;
     std::string type;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(other, territory, type);
+	}
 };
 
 struct timezone_info
@@ -672,6 +679,12 @@ struct timezone_info
     timezone_info() = default;
     std::string timezone_id;
     std::string standard_name;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(timezone_id, standard_name);
+	}
 };
 
 }  // detail
@@ -724,6 +737,11 @@ struct TZ_DB
         return *this;
     }
 #endif  // !defined(_MSC_VER) || (_MSC_VER >= 1900)
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(version, zones, links, leaps, rules, mappings, native_zones);
+	}
 };
 
 std::ostream&
@@ -731,6 +749,9 @@ operator<<(std::ostream& os, const TZ_DB& db);
 
 const TZ_DB& get_tzdb();
 const TZ_DB& reload_tzdb();
+
+void pack(std::ostringstream& os);
+void unpack(std::istringstream& is);
 
 #if HAS_REMOTE_API
 std::string remote_version();

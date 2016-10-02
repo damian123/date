@@ -46,6 +46,7 @@
 #include <string>
 #include <utility>
 #include <type_traits>
+#include <cereal/access.hpp>
 
 namespace date
 {
@@ -244,6 +245,14 @@ public:
 
     CONSTCD11 explicit operator unsigned() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(d_);
+	}
 };
 
 CONSTCD11 bool operator==(const day& x, const day& y) NOEXCEPT;
@@ -282,6 +291,14 @@ public:
 
     CONSTCD11 explicit operator unsigned() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(m_);
+	}
 };
 
 CONSTCD11 bool operator==(const month& x, const month& y) NOEXCEPT;
@@ -325,6 +342,14 @@ public:
 
     static CONSTCD11 year min() NOEXCEPT;
     static CONSTCD11 year max() NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_);
+	}	
 };
 
 CONSTCD11 bool operator==(const year& x, const year& y) NOEXCEPT;
@@ -371,6 +396,14 @@ public:
 
 private:
     static CONSTCD11 unsigned char weekday_from_days(int z) NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(wd_);
+	}
 };
 
 CONSTCD11 bool operator==(const weekday& x, const weekday& y) NOEXCEPT;
@@ -398,6 +431,14 @@ public:
     CONSTCD11 date::weekday weekday() const NOEXCEPT;
     CONSTCD11 unsigned index() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(wd_, index_)
+	}
 };
 
 CONSTCD11 bool operator==(const weekday_indexed& x, const weekday_indexed& y) NOEXCEPT;
@@ -418,6 +459,14 @@ public:
 
     CONSTCD11 date::weekday weekday() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(wd_);
+	}
 };
 
 CONSTCD11 bool operator==(const weekday_last& x, const weekday_last& y) NOEXCEPT;
@@ -447,6 +496,14 @@ public:
     CONSTCD14 year_month& operator-=(const years& dy) NOEXCEPT;
 
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_, m_)
+	}
 };
 
 CONSTCD11 bool operator==(const year_month& x, const year_month& y) NOEXCEPT;
@@ -484,6 +541,14 @@ public:
     CONSTCD11 date::day   day() const NOEXCEPT;
 
     CONSTCD14 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(m_, d_);
+	}
 };
 
 CONSTCD11 bool operator==(const month_day& x, const month_day& y) NOEXCEPT;
@@ -508,6 +573,14 @@ public:
 
     CONSTCD11 date::month month() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(m_)
+	}
 };
 
 CONSTCD11 bool operator==(const month_day_last& x, const month_day_last& y) NOEXCEPT;
@@ -535,6 +608,14 @@ public:
     CONSTCD11 date::weekday_indexed weekday_indexed() const NOEXCEPT;
 
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(m_, wdi_)
+	}
 };
 
 CONSTCD11 bool operator==(const month_weekday& x, const month_weekday& y) NOEXCEPT;
@@ -559,6 +640,14 @@ public:
     CONSTCD11 date::weekday_last weekday_last() const NOEXCEPT;
 
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(m_, wdl_);
+	}
 };
 
 CONSTCD11
@@ -603,6 +692,14 @@ public:
 private:
     static CONSTCD14 year_month_day from_days(days dp) NOEXCEPT;
     CONSTCD14 days to_days() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_, m_, d_)
+	}
 };
 
 CONSTCD11 bool operator==(const year_month_day& x, const year_month_day& y) NOEXCEPT;
@@ -647,6 +744,14 @@ public:
     CONSTCD14 operator sys_days() const NOEXCEPT;
     CONSTCD14 explicit operator local_days() const NOEXCEPT;
     CONSTCD11 bool ok() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_, mdl_)
+	}
 };
 
 CONSTCD11
@@ -723,6 +828,14 @@ public:
 private:
     static CONSTCD14 year_month_weekday from_days(days dp) NOEXCEPT;
     CONSTCD14 days to_days() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_, m_, wdi_)
+	}
 };
 
 CONSTCD11
@@ -786,6 +899,14 @@ public:
 
 private:
     CONSTCD14 days to_days() const NOEXCEPT;
+
+	friend class cereal::access;
+
+	template <class Archive>
+	void serialize(Archive & ar)
+	{
+		ar(y_, m_, wdl_)
+	}
 };
 
 CONSTCD11
