@@ -1,11 +1,5 @@
 #pragma once
 
-#include <type_traits>
-#include <sstream>
-#include <ostream>
-#include <istream>
-#include <memory>
-
 #include <cereal/cereal.hpp>
 
 #include <cereal/archives/xml.hpp>
