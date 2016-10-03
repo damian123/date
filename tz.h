@@ -375,6 +375,29 @@ private:
 	}
 };
 
+#if defined(_MSC_VER) && (_MSC_VER < 1900)
+inline
+time_zone::time_zone(time_zone&& src)
+  : name_(std::move(src.name_)), zonelets_(std::move(src.zonelets_))
+#if LAZY_INIT
+, adjusted_(std::move(src.adjusted_))
+#endif
+{}
+
+inline
+time_zone&
+time_zone::operator=(time_zone&& src)
+{
+  name_ = std::move(src.name_);
+  zonelets_ = std::move(src.zonelets_);
+#if LAZY_INIT
+  adjusted_ = std::move(src.adjusted_);
+#endif
+  return *this;
+}
+
+#endif  // defined(_MSC_VER) && (_MSC_VER < 1900)
+
 inline
 const std::string&
 time_zone::name() const
@@ -749,9 +772,7 @@ operator<<(std::ostream& os, const TZ_DB& db);
 
 const TZ_DB& get_tzdb();
 const TZ_DB& reload_tzdb();
-
-void pack(std::ostringstream& os);
-void unpack(std::istringstream& is);
+void pack();
 
 #if HAS_REMOTE_API
 std::string remote_version();

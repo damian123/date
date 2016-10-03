@@ -95,7 +95,7 @@
 #include <codecvt>
 #endif // _WIN32
 
-#include <pack_unpack.h>
+#include <packunpack.h>
 
 // unistd.h is used on some platforms as part of the the means to get
 // the current time zone. On Win32 Windows.h provides a means to do it.
@@ -2718,6 +2718,18 @@ static
 TZ_DB
 init_tzdb()
 {
+  TZ_DB db;
+  std::ifstream is("tzdb.bin", std::ifstream::binary);  // TODO: add the path
+  cereal::BinaryInputArchive archive(is);
+  archive(cereal::make_nvp("TimeZoneDatabase", db));
+  return db;
+}
+
+
+static
+TZ_DB
+load_tzdb()
+{
     using namespace date;
     const std::string path = install + folder_delimiter;
     std::string line;
@@ -2864,18 +2876,13 @@ get_tzdb()
     return ref;
 }
 
-void pack(std::ostringstream& os)
-{
-	TZ_DB& db = access_tzdb() = init_tzdb();	
-	cereal::BinaryOutputArchive archive(os);
-	archive(cereal::make_nvp("TimeZoneDatabase", db));	
-}
-
-void unpack(std::istringstream& is)
-{
-	TZ_DB result;	
-	cereal::BinaryInputArchive archive(is);
-	archive(cereal::make_nvp("TimeZoneDatabase", result));
+void pack()
+{  
+  std::ofstream os;
+  os.open("tzdb.bin", std::ofstream::binary);
+  TZ_DB& db = access_tzdb() = load_tzdb();
+  cereal::BinaryOutputArchive archive(os);
+  archive(cereal::make_nvp("TimeZoneDatabase", db));
 }
 
 const time_zone*
