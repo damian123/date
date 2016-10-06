@@ -184,7 +184,7 @@ public:
 		ar(name_);
 		ar(starting_year_, ending_year_);
 		ar(starting_at_);
-		ar(save_.count());
+		ar(save_);
 		ar(abbrev_);
 	}
 
